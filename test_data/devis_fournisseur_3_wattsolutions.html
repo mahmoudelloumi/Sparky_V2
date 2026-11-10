@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Devis N° 2026-DV-117 — WATT SOLUTIONS</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Verdana", "Segoe UI", Arial, sans-serif;
+    font-size: 11pt; color: #1f2937; margin: 0; padding: 18px; background: #fff;
+  }
+  .header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 3px solid #2563eb; padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .logo {
+    width: 78px; height: 78px; background: #1e3a8a; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 10px rgba(30,58,138,.25);
+  }
+  .company-name { font-size: 22pt; font-weight: 800; color: #1e3a8a; line-height: 1; }
+  .company-tag  { font-size: 9pt; color: #2563eb; font-weight: 600; letter-spacing: 1.2px; margin-top: 4px; }
+  .company-info { font-size: 8.5pt; color: #555; line-height: 1.5; margin-top: 6px; }
+
+  .doc-meta { background: #1e3a8a; color: #fff; border-radius: 8px; padding: 12px 16px; min-width: 240px; }
+  .doc-title { font-size: 22pt; font-weight: 800; color: #fff; text-align: center; margin: 0 0 8px; letter-spacing: 1px; }
+  .doc-meta table { width: 100%; font-size: 9pt; border-collapse: collapse; }
+  .doc-meta td { padding: 3px 0; }
+  .doc-meta .lbl { color: #cbd5e1; font-weight: 600; }
+  .doc-meta .val { text-align: right; font-weight: 700; color: #fff; }
+
+  .client-block {
+    background: #eff6ff; border-left: 4px solid #2563eb; padding: 10px 14px;
+    margin-bottom: 18px; border-radius: 0 6px 6px 0;
+  }
+  .client-block .lbl { color: #777; font-size: 9pt; font-weight: 600; margin-bottom: 3px; }
+  .client-block .name { font-size: 13pt; font-weight: 700; color: #1e3a8a; }
+  .client-block .addr { font-size: 9.5pt; color: #555; margin-top: 3px; }
+
+  table.items { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+  table.items thead th {
+    background: #2563eb; color: #fff; font-size: 9pt; font-weight: 700;
+    text-transform: uppercase; padding: 8px 6px; border: 1px solid #1e3a8a;
+  }
+  table.items tbody td { border: 1px solid #d8dde6; padding: 7px 8px; font-size: 9.5pt; vertical-align: top; }
+  table.items tbody tr:nth-child(even) { background: #f8fafc; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .ctr { text-align: center; }
+
+  .totals-row { display: flex; gap: 14px; margin-top: 8px; }
+  .tva-table, .totals-table { border-collapse: collapse; font-size: 9.5pt; }
+  .tva-table th, .tva-table td { border: 1px solid #d8dde6; padding: 6px 12px; }
+  .tva-table th { background: #dbeafe; color: #1e3a8a; font-weight: 700; }
+  .totals-spacer { flex: 1; }
+  .totals-table { flex: 0 0 320px; min-width: 320px; }
+  .totals-table td { padding: 7px 12px; border: 1px solid #d8dde6; }
+  .totals-table td.lbl { background: #dbeafe; font-weight: 700; color: #1e3a8a; width: 55%; }
+  .totals-table td.val { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .totals-table tr.grand td.lbl { background: #1e3a8a; color: #fff; font-size: 11pt; }
+  .totals-table tr.grand td.val { background: #fde68a; color: #1e3a8a; font-size: 13pt; font-weight: 800; }
+
+  .conditions {
+    margin-top: 16px; padding: 10px 14px; background: #eff6ff;
+    border-left: 4px solid #2563eb; font-size: 9.5pt; color: #333;
+  }
+  .conditions strong { color: #1e3a8a; }
+
+  .footer {
+    margin-top: 24px; border-top: 2px solid #1e3a8a; padding-top: 10px;
+    display: flex; justify-content: space-between; font-size: 8pt; color: #777;
+  }
+  .signature { text-align: center; margin-top: 30px; font-size: 9pt; color: #555; }
+  .signature .line { width: 180px; border-top: 1px solid #999; margin: 50px auto 6px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">
+    <div class="logo">
+      <svg width="56" height="56" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <path d="M36 6 L18 36 L30 36 L26 58 L46 28 L34 28 Z" fill="#facc15" stroke="#1e3a8a" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div>
+      <div class="company-name">WATT SOLUTIONS</div>
+      <div class="company-tag">ÉNERGIE & DOMOTIQUE — TUNISIE</div>
+      <div class="company-info">
+        Avenue Mohamed V, Immeuble Carthage Center, Bureau 4-B<br>
+        1002 Tunis Belvédère — Tunisie<br>
+        Tél: +216 70 250 999 — info@wattsolutions.tn<br>
+        MF: 1789012/T/A/M/000 — RC: B22789012022
+      </div>
+    </div>
+  </div>
+
+  <div class="doc-meta">
+    <div class="doc-title">DEVIS</div>
+    <table>
+      <tr><td class="lbl">N°</td><td class="val">2026-DV-117</td></tr>
+      <tr><td class="lbl">Date</td><td class="val">19/04/2026</td></tr>
+      <tr><td class="lbl">Validité</td><td class="val">21 jours</td></tr>
+      <tr><td class="lbl">Client</td><td class="val">A. BEN SALEM</td></tr>
+      <tr><td class="lbl">Conseiller</td><td class="val">S. JEMLI</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="client-block">
+  <div class="lbl">À L'ATTENTION DE</div>
+  <div class="name">M. AHMED BEN SALEM</div>
+  <div class="addr">
+    Avenue Habib Bourguiba, Résidence El Yasmine, Apt B12 — 3000 Sfax<br>
+    Email : ahmed.bensalem@gmail.com — Tél : +216 98 765 432
+  </div>
+</div>
+
+<table class="items">
+  <thead>
+    <tr>
+      <th style="width:4%">N°</th>
+      <th style="width:13%">Réf.</th>
+      <th>Article</th>
+      <th style="width:6%">Qté</th>
+      <th style="width:11%">P.U. HT</th>
+      <th style="width:6%">Remise</th>
+      <th style="width:12%">Net HT</th>
+      <th style="width:6%">TVA</th>
+      <th style="width:12%">TTC</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="ctr">1</td>
+      <td class="ctr">PAN-585</td>
+      <td>Panneaux Trina Solar 585W bifacial</td>
+      <td class="ctr">8</td>
+      <td class="num">610.000</td>
+      <td class="ctr">5 %</td>
+      <td class="num">4 636.000</td>
+      <td class="ctr">7 %</td>
+      <td class="num">4 960.520</td>
+    </tr>
+    <tr>
+      <td class="ctr">2</td>
+      <td class="ctr">ONDU-5K</td>
+      <td>Convertisseur Foxess 5 kVA H3 Pro</td>
+      <td class="ctr">1</td>
+      <td class="num">3 290.000</td>
+      <td class="ctr">0 %</td>
+      <td class="num">3 290.000</td>
+      <td class="ctr">7 %</td>
+      <td class="num">3 520.300</td>
+    </tr>
+    <tr>
+      <td class="ctr">3</td>
+      <td class="ctr">BAT-PYL</td>
+      <td>Pack batterie Pylon US5000 4,8 kWh</td>
+      <td class="ctr">2</td>
+      <td class="num">2 890.000</td>
+      <td class="ctr">0 %</td>
+      <td class="num">5 780.000</td>
+      <td class="ctr">19 %</td>
+      <td class="num">6 878.200</td>
+    </tr>
+    <tr>
+      <td class="ctr">4</td>
+      <td class="ctr">CAB-4MM</td>
+      <td>Fil DC solaire 4mm² 50 mètres (rouge + noir)</td>
+      <td class="ctr">2</td>
+      <td class="num">99.000</td>
+      <td class="ctr">0 %</td>
+      <td class="num">198.000</td>
+      <td class="ctr">19 %</td>
+      <td class="num">235.620</td>
+    </tr>
+    <tr>
+      <td class="ctr">5</td>
+      <td class="ctr">PROT-ACDC</td>
+      <td>Boîtier protection AC DC + parafoudre</td>
+      <td class="ctr">1</td>
+      <td class="num">710.000</td>
+      <td class="ctr">0 %</td>
+      <td class="num">710.000</td>
+      <td class="ctr">19 %</td>
+      <td class="num">844.900</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="totals-row">
+  <table class="tva-table">
+    <thead>
+      <tr><th>TVA</th><th>Base HT</th><th>Montant</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="num">7 %</td><td class="num">7 926.000</td><td class="num">554.820</td></tr>
+      <tr><td class="num">19 %</td><td class="num">6 688.000</td><td class="num">1 270.720</td></tr>
+    </tbody>
+  </table>
+
+  <div class="totals-spacer"></div>
+
+  <table class="totals-table">
+    <tr><td class="lbl">Total HT brut</td><td class="val">14 858.000 TND</td></tr>
+    <tr><td class="lbl">Remise totale</td><td class="val">−244.000 TND</td></tr>
+    <tr><td class="lbl">Total HT net</td><td class="val">14 614.000 TND</td></tr>
+    <tr><td class="lbl">Total TVA</td><td class="val">1 825.540 TND</td></tr>
+    <tr><td class="lbl">Timbre fiscal</td><td class="val">1.000 TND</td></tr>
+    <tr class="grand"><td class="lbl">TOTAL TTC</td><td class="val">16 440.540 TND</td></tr>
+  </table>
+</div>
+
+<div class="conditions">
+  <strong>Modalités :</strong> Devis valable 21 jours · Acompte 30 % à la commande · Livraison gratuite à Sfax sous 7 jours ·
+  Possibilité de financement en 3× sans frais via partenaire bancaire · Installation par notre équipe agréée (sur option).
+</div>
+
+<div class="signature">
+  Accord client (date + signature)
+  <div class="line"></div>
+  Pour WATT SOLUTIONS — S. JEMLI
+</div>
+
+<div class="footer">
+  <div>WATT SOLUTIONS SARL · MF: 1789012/T/A/M/000 · RIB: 10 014 0301 0000 7777 188 (STB Banque)</div>
+  <div>Page 1/1 · Document généré le 19/04/2026</div>
+</div>
+
+</body>
+</html>

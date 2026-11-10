@@ -10,6 +10,8 @@ import {
   CompareRequest,
   CompareResponse,
   ComparaisonPrixResponse,
+  SmartCompareRequest,
+  SmartCompareResponse,
   DocumentType,
 } from '../models/document.model';
 
@@ -65,6 +67,12 @@ export class ApiService {
   comparePrices(payload: CompareRequest): Observable<CompareResponse> {
     return this.http
       .post<CompareResponse>(`${this.base}/compare`, payload)
+      .pipe(catchError(this.handleError));
+  }
+
+  smartCompare(payload: SmartCompareRequest): Observable<SmartCompareResponse> {
+    return this.http
+      .post<SmartCompareResponse>(`${this.base}/compare/smart`, payload)
       .pipe(catchError(this.handleError));
   }
 

@@ -268,3 +268,105 @@
   mat-icon { font-size: 4rem; width: 4rem; height: 4rem; display: block; margin: 0 auto 16px; }
   p { font-size: 1.1rem; }
 }
+
+// ── Smart compare indicators ────────────────────────────────────────────────
+
+.smart-loading {
+  text-align: center;
+  padding: 24px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+  border-radius: 12px;
+
+  p {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 12px 0 0;
+    color: #1565c0;
+    font-weight: 600;
+    font-size: .95rem;
+  }
+
+  mat-icon { color: #7b1fa2; }
+}
+
+.smart-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  background: #ffebee;
+  border: 1px solid #ef9a9a;
+  border-radius: 8px;
+  color: #c62828;
+  font-size: .9rem;
+}
+
+// ── Article normalization display ───────────────────────────────────────────
+
+.norm-name {
+  display: block;
+  font-weight: 600;
+  color: #333;
+}
+
+.ref-code {
+  display: block;
+  font-size: .72rem;
+  color: #999;
+  font-family: 'Roboto Mono', monospace;
+  margin-top: 2px;
+}
+
+.col-cat { min-width: 120px; }
+
+.cat-badge {
+  background: #f3e5f5;
+  color: #7b1fa2;
+  border-radius: 10px;
+  padding: 2px 10px;
+  font-size: .75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.orig-desig {
+  display: block;
+  font-size: .72rem;
+  color: #888;
+  font-style: italic;
+  margin-top: 2px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-icon {
+  font-size: .9rem !important;
+  width: .9rem !important;
+  height: .9rem !important;
+  color: #7b1fa2;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+// ── Savings summary ─────────────────────────────────────────────────────────
+
+.savings-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+  border-radius: 8px;
+  color: #2e7d32;
+  font-weight: 600;
+  font-size: .9rem;
+
+  mat-icon { color: #4caf50; }
+}

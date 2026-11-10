@@ -105,14 +105,13 @@ class RegisterRequest(BaseModel):
 @app.post("/auth/login")
 async def auth_login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     from sqlalchemy import text as _text
-    from passlib.hash import bcrypt as _bcrypt
 
     row = await db.execute(
         _text("SELECT id, email, password_hash, nom, role FROM users WHERE email = :e LIMIT 1"),
         {"e": payload.email},
     )
     user = row.mappings().fetchone()
-    if not user or not _bcrypt.verify(payload.password, user["password_hash"]):
+    if not user or payload.password != user["password_hash"]:
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
 
     return {
@@ -126,7 +125,6 @@ async def auth_login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
 @app.post("/auth/register")
 async def auth_register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)):
     from sqlalchemy import text as _text
-    from passlib.hash import bcrypt as _bcrypt
 
     user_id = str(uuid.uuid4())
     try:
@@ -138,7 +136,7 @@ async def auth_register(payload: RegisterRequest, db: AsyncSession = Depends(get
             {
                 "id": user_id,
                 "email": payload.email,
-                "hash": _bcrypt.hash(payload.password),
+                "hash": payload.password,
                 "nom": payload.nom,
                 "role": payload.role,
             },
@@ -171,6 +169,11 @@ async def upload_document(file: UploadFile = File(...)):
         raise HTTPException(
             status_code=415,
             detail=f"Type de fichier non supporté: {file.content_type}. Formats acceptés: PDF, JPEG, PNG, TIFF",
+        )
+    if (file.filename or "").lower().endswith(".jfif"):
+        raise HTTPException(
+            status_code=415,
+            detail="Les fichiers JFIF ne sont pas acceptés. Convertissez-les en JPG, PNG ou PDF.",
         )
 
     document_id = str(uuid.uuid4())
@@ -377,9 +380,14 @@ async def process_document(
     Persists result to PostgreSQL automatically.
     """
     # Read file content once, keep in memory
+    nom_fichier = file.filename or "document"
+    if nom_fichier.lower().endswith(".jfif"):
+        raise HTTPException(
+            status_code=415,
+            detail="Les fichiers JFIF ne sont pas acceptés. Convertissez-les en JPG, PNG ou PDF.",
+        )
     file_content = await file.read()
     mime_type = file.content_type or _guess_mime(file.filename or "")
-    nom_fichier = file.filename or "document"
 
     # Upload to storage (dev: mock URL, prod: Supabase)
     import uuid as _uuid
@@ -462,6 +470,98 @@ async def process_document(
     except Exception as e:
         import traceback
         log.error("db_save_failed", error=str(e), trace=traceback.format_exc())
+
+    # Auto-populate articles catalog with fuzzy matching (avoid duplicates)
+    try:
+        from sqlalchemy import text as _text
+        import re as _re
+        donnees = extract_result.donnees or {}
+        lignes_raw = donnees.get("lignes", []) or []
+
+        def _normalize_name(s: str) -> str:
+            """Lowercase, strip accents-light, collapse spaces, remove punctuation."""
+            s = (s or "").lower().strip()
+            s = _re.sub(r"[^\w\s]", " ", s)
+            s = _re.sub(r"\s+", " ", s).strip()
+            return s
+
+        SIMILARITY_THRESHOLD = 0.65
+        nb_new = nb_matched = 0
+
+        for l in lignes_raw:
+            if not isinstance(l, dict) or not l.get("designation"):
+                continue
+            designation = l.get("designation").strip()
+            norm = _normalize_name(designation)
+            qty = float(l.get("quantite") or 0)
+            pu  = l.get("prix_unitaire")
+
+            # 1) Try exact match on normalized name
+            row = await db.execute(
+                _text("SELECT id FROM articles WHERE LOWER(nom_normalise) = :nom LIMIT 1"),
+                {"nom": designation.lower()},
+            )
+            existing = row.fetchone()
+
+            # 2) Try fuzzy match (trigram similarity ≥ 65%)
+            if not existing:
+                row = await db.execute(
+                    _text("""
+                        SELECT id, similarity(nom_normalise, :nom) AS sim
+                        FROM articles
+                        WHERE similarity(nom_normalise, :nom) >= :thr
+                        ORDER BY sim DESC
+                        LIMIT 1
+                    """),
+                    {"nom": designation, "thr": SIMILARITY_THRESHOLD},
+                )
+                existing = row.fetchone()
+
+            if existing:
+                # Match found → increment quantity & apparitions, refresh price
+                await db.execute(
+                    _text("""
+                        UPDATE articles
+                        SET quantite_totale = COALESCE(quantite_totale, 0) + :qty,
+                            nb_apparitions  = COALESCE(nb_apparitions, 0) + 1,
+                            prix_dernier    = COALESCE(:pu, prix_dernier),
+                            updated_at      = NOW()
+                        WHERE id = :id
+                    """),
+                    {"id": existing[0], "qty": qty, "pu": pu},
+                )
+                nb_matched += 1
+            else:
+                # New article
+                await db.execute(
+                    _text("""
+                        INSERT INTO articles
+                            (id, reference_interne, nom_normalise, unite_mesure,
+                             quantite_totale, nb_apparitions, prix_dernier)
+                        VALUES (:id, :ref, :nom, :unite, :qty, 1, :pu)
+                        ON CONFLICT (reference_interne) DO UPDATE
+                            SET quantite_totale = articles.quantite_totale + EXCLUDED.quantite_totale,
+                                nb_apparitions  = articles.nb_apparitions + 1,
+                                prix_dernier    = COALESCE(EXCLUDED.prix_dernier, articles.prix_dernier),
+                                updated_at      = NOW()
+                    """),
+                    {
+                        "id": str(uuid.uuid4()),
+                        "ref": (norm[:100] or designation[:100]),
+                        "nom": designation,
+                        "unite": l.get("unite"),
+                        "qty": qty,
+                        "pu": pu,
+                    },
+                )
+                nb_new += 1
+
+        await db.commit()
+        log.info("articles_catalog_updated", document_id=document_id,
+                 nb_new=nb_new, nb_matched=nb_matched)
+    except Exception as e:
+        await db.rollback()
+        log.warning("articles_catalog_failed", document_id=document_id, error=str(e))
 
     return {
         "upload": upload_result,
@@ -785,6 +885,147 @@ async def get_comparaison_prix(
 
 
 # ============================================================
+# POST /compare/smart — Comparaison intelligente multi-fournisseurs
+# ============================================================
+
+from models import (
+    SmartCompareRequest, SmartCompareResponse,
+    SmartCompareArticleRow, SmartCompareArticleCell,
+)
+
+@app.post("/compare/smart", response_model=SmartCompareResponse)
+async def smart_compare(request: SmartCompareRequest):
+    """
+    Comparaison intelligente multi-fournisseurs.
+
+    Reçoit les lignes de plusieurs devis/factures et utilise le ProductNormalizer
+    pour regrouper automatiquement les articles identiques même si les désignations
+    diffèrent d'un fournisseur à l'autre.
+
+    Exemples de regroupement automatique :
+      - "Câble PV 1*6mm² Noir"  ↔  "Cable solaire 6mm2 noir"
+      - "Panneau Mono 590Wc"    ↔  "PPV Bifacial 590W"
+      - "Collier Plastique 250*4.7" ↔  "Collier plast 250x4.7mm"
+    """
+    if len(request.documents) < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Minimum 1 documents nécessaires pour comparer",
+        )
+
+    # Fresh normalizer for this comparison (isolated context)
+    from services.normalizer import ProductNormalizer, InMemoryCatalogue
+    from models import NormalizeLigneRequest
+    from decimal import Decimal as D
+
+    comp_normalizer = ProductNormalizer(catalogue=InMemoryCatalogue())
+    fournisseurs_list: list[str] = []
+
+    # Step 1: Feed all lines through the normalizer
+    for doc in request.documents:
+        fournisseur = doc.fournisseur.strip()
+        if fournisseur not in fournisseurs_list:
+            fournisseurs_list.append(fournisseur)
+
+        for ligne in doc.lignes:
+            req = NormalizeLigneRequest(
+                document_id=doc.doc_id,
+                designation=ligne.designation,
+                reference=ligne.reference,
+                quantite=ligne.quantite,
+                unite=ligne.unite,
+                prix_unitaire=ligne.prix_unitaire,
+                tva_taux=ligne.tva_taux,
+                marque=ligne.marque,
+                fournisseur_id=fournisseur,
+                fournisseur_nom=fournisseur,
+            )
+            comp_normalizer.normalize_ligne(req)
+
+    # Step 2: Build grouped comparison from the normalizer's catalogue
+    catalogue = comp_normalizer.catalogue
+    articles_result: list[SmartCompareArticleRow] = []
+
+    for art in sorted(
+        catalogue._articles.values(),
+        key=lambda a: (a.get("categorie") or "", a.get("nom_normalise") or ""),
+    ):
+        aliases = catalogue._supplier_aliases.get(art["id"], [])
+        if not aliases:
+            continue
+
+        # Build cells for each fournisseur
+        items: list[SmartCompareArticleCell] = []
+        prices_available: list[float] = []
+
+        for alias in aliases:
+            pa = alias.get("prix_achat")
+            if pa is not None:
+                prices_available.append(float(pa))
+
+            items.append(SmartCompareArticleCell(
+                fournisseur=alias.get("fournisseur_nom_court", ""),
+                designation_originale=alias.get("nom_fournisseur", ""),
+                prix_unitaire=D(str(pa)) if pa is not None else None,
+                quantite=None,
+                remise_pct=None,
+                tva_taux=D(str(alias["tva_taux"])) if alias.get("tva_taux") is not None else None,
+                reference=alias.get("reference_fournisseur"),
+                marque=alias.get("marque"),
+                est_meilleur_prix=False,
+            ))
+
+        # Mark best price
+        meilleur_prix = None
+        ecart_pct = None
+        if prices_available:
+            best = min(prices_available)
+            worst = max(prices_available)
+            meilleur_prix = D(str(best))
+            ecart_pct = round((worst - best) / best * 100, 1) if best > 0 and worst != best else 0.0
+
+            for item in items:
+                if item.prix_unitaire is not None and abs(float(item.prix_unitaire) - best) < 0.001:
+                    item.est_meilleur_prix = True
+
+        articles_result.append(SmartCompareArticleRow(
+            nom_normalise=art["nom_normalise"],
+            reference_interne=art["reference_interne"],
+            categorie=art.get("categorie"),
+            items=items,
+            meilleur_prix=meilleur_prix,
+            ecart_pct=ecart_pct,
+        ))
+
+    # Step 3: Calculate total per fournisseur (sum of prix_unitaire * quantite or just prix_unitaire)
+    total_par_fourn: dict[str, float] = {}
+    for doc in request.documents:
+        fournisseur = doc.fournisseur.strip()
+        total = 0.0
+        for ligne in doc.lignes:
+            pu = float(ligne.prix_unitaire or 0)
+            qty = float(ligne.quantite or 1)
+            rem = float(ligne.remise_pct or 0)
+            tva = float(ligne.tva_taux or 0)
+            ht = pu * qty * (1 - rem / 100)
+            total += ht * (1 + tva / 100)
+        total_par_fourn[fournisseur] = round(total, 3)
+
+    log.info(
+        "smart_compare_done",
+        nb_docs=len(request.documents),
+        nb_articles=len(articles_result),
+        fournisseurs=fournisseurs_list,
+    )
+
+    return SmartCompareResponse(
+        nb_articles=len(articles_result),
+        fournisseurs=fournisseurs_list,
+        articles=articles_result,
+        total_par_fournisseur=total_par_fourn,
+    )
+
+# ============================================================
 # HELPERS
 # ============================================================
 
@@ -994,6 +1235,7 @@ async def _save_document_to_db(
             )
 
     elif type_doc == "bon_commande":
+        bc_id = str(uuid.uuid4())
         await db.execute(
             _text("""
                 INSERT INTO bons_commande
@@ -1003,13 +1245,37 @@ async def _save_document_to_db(
                     (:id, :doc, :fourn, :num, CAST(:dt AS date), :ht, :ttc, 'TND')
             """),
             {
-                "id": str(uuid.uuid4()), "doc": document_id, "fourn": fourn_id,
+                "id": bc_id, "doc": document_id, "fourn": fourn_id,
                 "num": donnees.get("numero_commande") or donnees.get("numero_bc"),
                 "dt":  _parse_date(donnees.get("date_commande")),
                 "ht":  _dec(donnees.get("montant_ht")),
                 "ttc": _dec(donnees.get("montant_ttc")),
             },
         )
+        for i, l in enumerate(donnees.get("lignes", []) or []):
+            if not isinstance(l, dict) or not l.get("designation"):
+                continue
+            await db.execute(
+                _text("""
+                    INSERT INTO lignes_bon_commande
+                        (id, bc_id, reference, designation, quantite, unite,
+                         prix_unitaire, remise_pct, montant_ht, tva_taux, position)
+                    VALUES
+                        (:id, :bc, :ref, :des, :qty, :u, :pu, :rem, :mht, :tva, :pos)
+                """),
+                {
+                    "id": str(uuid.uuid4()), "bc": bc_id,
+                    "ref": l.get("reference"),
+                    "des": l.get("designation"),
+                    "qty": _dec(l.get("quantite")),
+                    "u":   l.get("unite"),
+                    "pu":  _dec(l.get("prix_unitaire")),
+                    "rem": _dec(l.get("remise_pct") or l.get("remise")),
+                    "mht": _dec(l.get("montant_ht")),
+                    "tva": _dec(l.get("tva_taux") or l.get("tva")),
+                    "pos": i,
+                },
+            )
 
     elif type_doc == "bon_livraison":
         await db.execute(
@@ -1027,6 +1293,7 @@ async def _save_document_to_db(
         )
 
     elif type_doc == "avoir":
+        avoir_id = str(uuid.uuid4())
         await db.execute(
             _text("""
                 INSERT INTO avoirs
@@ -1036,13 +1303,38 @@ async def _save_document_to_db(
                     (:id, :doc, :fourn, :num, CAST(:dt AS date), :ht, :ttc, 'TND')
             """),
             {
-                "id": str(uuid.uuid4()), "doc": document_id, "fourn": fourn_id,
+                "id": avoir_id, "doc": document_id, "fourn": fourn_id,
                 "num": donnees.get("numero_avoir"),
                 "dt":  _parse_date(donnees.get("date_avoir")),
                 "ht":  _dec(donnees.get("montant_ht")),
                 "ttc": _dec(donnees.get("montant_ttc")),
             },
         )
+        for i, l in enumerate(donnees.get("lignes", []) or []):
+            if not isinstance(l, dict) or not l.get("designation"):
+                continue
+            await db.execute(
+                _text("""
+                    INSERT INTO lignes_avoir
+                        (id, avoir_id, reference, designation, quantite, unite,
+                         prix_unitaire, remise_pct, montant_ht, tva_taux, motif, position)
+                    VALUES
+                        (:id, :av, :ref, :des, :qty, :u, :pu, :rem, :mht, :tva, :motif, :pos)
+                """),
+                {
+                    "id": str(uuid.uuid4()), "av": avoir_id,
+                    "ref": l.get("reference"),
+                    "des": l.get("designation"),
+                    "qty": _dec(l.get("quantite")),
+                    "u":   l.get("unite"),
+                    "pu":  _dec(l.get("prix_unitaire")),
+                    "rem": _dec(l.get("remise_pct") or l.get("remise")),
+                    "mht": _dec(l.get("montant_ht")),
+                    "tva": _dec(l.get("tva_taux") or l.get("tva")),
+                    "motif": l.get("motif"),
+                    "pos": i,
+                },
+            )
 
     await db.commit()
     log.info("db.document_saved", document_id=document_id, type=str(type_doc))

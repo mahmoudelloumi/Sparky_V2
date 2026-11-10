@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Devis - Sunpower Tunisie</title>
+    <style>
+        body { font-family: 'Georgia', serif; color: #222; margin: 0; padding: 40px; background: #eceff1; }
+        .container { max-width: 800px; margin: auto; background: #fff; padding: 50px; border: 1px solid #ccc; position: relative; }
+        .header { display: flex; justify-content: space-between; margin-bottom: 40px; }
+        .logo h1 { margin: 0; color: #f57c00; font-family: 'Arial', sans-serif; font-size: 32px; }
+        .info { text-align: left; background: #fff3e0; padding: 15px; border-left: 4px solid #f57c00; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: 'Arial', sans-serif; font-size: 13px; }
+        th, td { padding: 10px; border: 1px solid #555; text-align: center; }
+        th { background-color: #424242; color: #fff; }
+        td:nth-child(2) { text-align: left; }
+        .totals { margin-top: 40px; text-align: right; font-family: 'Arial', sans-serif; }
+        .totals table { width: 300px; float: right; }
+        .totals th, .totals td { border: none; padding: 8px; }
+        .totals th { background: transparent; color: #222; text-align: left; font-weight: bold; }
+        .totals td { text-align: right; }
+        .totals tr.ttc { border-top: 2px solid #f57c00; font-size: 18px; font-weight: bold; color: #f57c00; }
+        .clear { clear: both; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <h1>SUNPOWER</h1>
+                <h1 style="color:#424242">TUNISIE</h1>
+                <p style="font-family:'Arial'; color:#777; font-size:12px">L'énergie de demain</p>
+            </div>
+            <div class="info">
+                <h3 style="margin:0 0 10px 0; font-family:'Arial'">OFFRE DE PRIX N° SP-991</h3>
+                <p style="margin:0; font-family:'Arial'">Date : 02 Mai 2026</p>
+                <p style="margin:0; font-family:'Arial'">Validité : 30 jours</p>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>ORDRE</th>
+                    <th>DÉSIGNATION DES BIENS</th>
+                    <th>QUANTITÉ</th>
+                    <th>P.U. HT</th>
+                    <th>TVA</th>
+                    <th>TOTAL HT</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td>Plaque Solaire 545 Watts (Monocristalline)</td>
+                    <td>10.00</td>
+                    <td>460.00</td>
+                    <td>7%</td>
+                    <td>4600.00</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td>Inverter Solaire 8000W Hybride</td>
+                    <td>1.00</td>
+                    <td>2750.00</td>
+                    <td>7%</td>
+                    <td>2750.00</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td>Accumulateur LiFePO4 5.12 kWh</td>
+                    <td>2.00</td>
+                    <td>3300.00</td>
+                    <td>19%</td>
+                    <td>6600.00</td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td>Câble PV 6mm² (Rouge/Noir)</td>
+                    <td>100.00</td>
+                    <td>3.20</td>
+                    <td>19%</td>
+                    <td>320.00</td>
+                </tr>
+                <tr>
+                    <td>5</td>
+                    <td>Tableau électrique de protection PV</td>
+                    <td>1.00</td>
+                    <td>480.00</td>
+                    <td>19%</td>
+                    <td>480.00</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="totals">
+            <table>
+                <tr>
+                    <th>Montant Total HT</th>
+                    <td>14 750.00 TND</td>
+                </tr>
+                <tr>
+                    <th>Total TVA</th>
+                    <td>1 829.50 TND</td>
+                </tr>
+                <tr class="ttc">
+                    <th>MONTANT TTC</th>
+                    <td>16 579.50 TND</td>
+                </tr>
+            </table>
+            <div class="clear"></div>
+        </div>
+    </div>
+</body>
+</html>

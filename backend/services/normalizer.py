@@ -89,7 +89,9 @@ _CATEGORY_PATTERNS: list[tuple[str, list[str]]] = [
                                    "conducteur", "souple", "rigide", "fil 1*", "fil 1x",
                                    "cable pv", "cable solaire"]),
     ("Panneaux photovoltaïque",  ["panneau", "photovoltaique", "module pv", "solar", "bifacial",
-                                   "monocristallin", "ppv"]),
+                                   "monocristallin", "ppv", "plaque solaire", "vertex"]),
+    ("Onduleur",                 ["onduleur", "inverter", "convertisseur", "hybride"]),
+    ("Batterie",                 ["batterie", "stockage", "lithium", "lifepo4", "accumulateur", "pylontech"]),
     ("Structure métallique",     ["corniere", "tube carre", "strm", "ipe", "cr40", "tcr40", "cac0"]),
     ("Aluminium",                ["support simple", "support triple", "ss500", "st460", "s.s34"]),
     ("Disjoncteur diff",         ["disjoncteur", "ddf", "disj diff"]),
@@ -169,10 +171,10 @@ def extract_specs(designation: str, reference: str = "", category: str = "") -> 
 
     # ── Panneaux PV ─────────────────────────────────────────────────────────
     if ("panneau" in text or "photovoltaique" in text or "ppv" in text
-            or "module pv" in text or "solar" in text
+            or "module pv" in text or "solar" in text or "plaque" in text
             or category == "Panneaux photovoltaïque"):
-        # puissance "590wc", "590 wc"
-        m = re.search(r"(\d+(?:[.,]\d+)?)\s*wc", text)
+        # puissance "590wc", "590 wc", "545 w", "545 watts"
+        m = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:w|wc|watts)(?:\b|$)", text)
         if m:
             specs.puissance_wc = float(m.group(1).replace(",", "."))
 
@@ -182,6 +184,36 @@ def extract_specs(designation: str, reference: str = "", category: str = "") -> 
             specs.technologie = "monocristallin"
         elif "poly" in text:
             specs.technologie = "polycristallin"
+
+    # ── Onduleurs ───────────────────────────────────────────────────────────
+    if category == "Onduleur" or any(k in text for k in ["onduleur", "inverter", "convertisseur"]):
+        # puissance "8kw", "8 kw", "8000w", "8kva"
+        m = re.search(r"(\d+(?:[.,]\d+)?)\s*(kw|kva|w)(?:\b|$)", text)
+        if m:
+            val = float(m.group(1).replace(",", "."))
+            unit = m.group(2)
+            if unit == "w" and val > 100:  # e.g., 8000W -> 8kW
+                val = val / 1000
+            specs.puissance_kw = val
+            
+        if "hybride" in text:
+            specs.technologie = "hybride"
+        if "triphase" in text:
+            specs.tension_type = "triphasé"
+        elif "monophase" in text:
+            specs.tension_type = "monophasé"
+
+    # ── Batteries ───────────────────────────────────────────────────────────
+    if category == "Batterie" or any(k in text for k in ["batterie", "stockage", "lithium", "lifepo4"]):
+        # capacite "5.12 kwh", "4.8kwh"
+        m = re.search(r"(\d+(?:[.,]\d+)?)\s*kwh", text)
+        if m:
+            specs.capacite_kwh = float(m.group(1).replace(",", "."))
+            
+        # tension "48v", "51.2v"
+        m = re.search(r"(\d+(?:[.,]\d+)?)\s*v(?:\b|$)", text)
+        if m:
+            specs.tension_v = float(m.group(1).replace(",", "."))
 
     # ── Structures métalliques ───────────────────────────────────────────────
     if any(k in text for k in ["corniere", "tube carre", "strm", "ipe", "cac0", "cr40", "tcr40"]):
@@ -299,8 +331,16 @@ def build_nom_normalise(designation: str, specs: ArticleSpecifications, category
 
     # Append key discriminating specs when not already present in the name
     name_lc = name.lower()
-    if category == "Panneaux photovoltaïque" and specs.puissance_wc and "wc" not in name_lc:
+    if category == "Panneaux photovoltaïque" and specs.puissance_wc and str(int(specs.puissance_wc)) not in name_lc:
         name += f" {int(specs.puissance_wc)}Wc"
+    if category == "Onduleur" and hasattr(specs, "puissance_kw") and specs.puissance_kw:
+        kw_str = f"{specs.puissance_kw:g}".replace('.', ',')
+        if kw_str not in name_lc and str(int(specs.puissance_kw * 1000)) not in name_lc:
+            name += f" {kw_str}kW"
+    if category == "Batterie" and hasattr(specs, "capacite_kwh") and specs.capacite_kwh:
+        kwh_str = f"{specs.capacite_kwh:g}".replace('.', ',')
+        if kwh_str not in name_lc:
+            name += f" {kwh_str}kWh"
     if category == "Câbles" and specs.section_mm2 and "mm" not in name_lc:
         name += f" {specs.section_mm2}mm²"
     if category in ("Structure métallique", "Aluminium"):
@@ -333,6 +373,8 @@ def build_reference_interne(designation: str, specs: ArticleSpecifications, cate
         "Câbles":                  "CABLE",
         "Colliers":                "COLLIER",
         "Panneaux photovoltaïque": "PANNEAU-PV",
+        "Onduleur":                "OND",
+        "Batterie":                "BAT",
         "Structure métallique":    "STRUCT",
         "Aluminium":               "SUPPORT",
         "Disjoncteur diff":        "DISJ-DIFF",
@@ -361,6 +403,10 @@ def build_reference_interne(designation: str, specs: ArticleSpecifications, cate
 
     if specs.puissance_wc is not None:
         parts.append(f"{int(specs.puissance_wc)}WC")
+    if getattr(specs, "puissance_kw", None) is not None:
+        parts.append(f"{specs.puissance_kw:g}KW".replace(".", ""))
+    if getattr(specs, "capacite_kwh", None) is not None:
+        parts.append(f"{specs.capacite_kwh:g}KWH".replace(".", ""))
     if specs.technologie:
         parts.append(specs.technologie.upper()[:6])
 
@@ -493,9 +539,11 @@ class InMemoryCatalogue:
 
             # When specs match perfectly, they are the canonical identity of the
             # product — a high base score is guaranteed regardless of text similarity
-            # (e.g. "FIL SOUPLE 1*6 V/J" vs "CABLE SOUPLE 1X6 VERT/JAUNE").
             if spec_score == 1.0:
                 score = 0.90 + 0.10 * text_score
+            elif spec_score == 0.5:
+                # No shared specs to compare (e.g. "Divers" category). Rely heavily on text similarity.
+                score = 0.2 * spec_score + 0.8 * text_score
             else:
                 score = 0.6 * spec_score + 0.4 * text_score
             results.append((art, score))

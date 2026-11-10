@@ -5,7 +5,7 @@
     <mat-icon>compare_arrows</mat-icon>
     Comparateur de prix
   </h1>
-  <p class="page-subtitle">Importez des devis ou factures de plusieurs fournisseurs — Sparky compare automatiquement</p>
+  <p class="page-subtitle">Importez des devis ou factures de plusieurs fournisseurs — Sparky compare automatiquement, même si les noms d'articles diffèrent</p>
 
   <!-- ═══════════════════════════════════════════════════════════
        STEP 1 — Document sources
@@ -94,17 +94,32 @@
     </button>
   </div>
 
+  <!-- Smart Compare loading -->
+  <div class="smart-loading" *ngIf="smartLoading()">
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    <p><mat-icon>psychology</mat-icon> Analyse IA en cours — regroupement intelligent des articles…</p>
+  </div>
+
+  <!-- Smart Compare error -->
+  <div class="smart-error" *ngIf="smartError()">
+    <mat-icon>error_outline</mat-icon>
+    <span>{{ smartError() }}</span>
+  </div>
+
   <!-- ═══════════════════════════════════════════════════════════
-       STEP 3 — Comparison table
+       STEP 3 — Comparison table (smart)
   ══════════════════════════════════════════════════════════════ -->
-  <mat-card class="result-card" *ngIf="articleRows().length > 0 && !anyLoading()">
+  <mat-card class="result-card" *ngIf="articleRows().length > 0 && !smartLoading()">
 
     <mat-card-header>
       <mat-card-title>
         <mat-icon>table_chart</mat-icon>
-        Comparaison des prix — {{ articleRows().length }} articles
+        Comparaison intelligente — {{ articleRows().length }} articles regroupés
       </mat-card-title>
-      <mat-card-subtitle>Vert = meilleur prix</mat-card-subtitle>
+      <mat-card-subtitle>
+        <mat-icon class="ai-icon">psychology</mat-icon>
+        Articles regroupés par spécifications (même produit = même ligne, même si les noms diffèrent)
+      </mat-card-subtitle>
     </mat-card-header>
 
     <mat-card-content>
@@ -112,7 +127,8 @@
         <table class="compare-table">
           <thead>
             <tr>
-              <th class="col-article">Article / Désignation</th>
+              <th class="col-article">Article normalisé</th>
+              <th class="col-cat">Catégorie</th>
               <th class="col-stock">Stock</th>
               <th *ngFor="let f of fournisseurs()" class="col-fourn">{{ f }}</th>
             </tr>
@@ -120,36 +136,38 @@
           <tbody>
             <tr *ngFor="let row of articleRows()">
 
-              <!-- Designation -->
-              <td class="col-article">{{ row.designation }}</td>
+              <!-- Normalized Designation -->
+              <td class="col-article">
+                <span class="norm-name">{{ row.nom_normalise }}</span>
+                <span class="ref-code">{{ row.reference_interne }}</span>
+              </td>
+
+              <!-- Category -->
+              <td class="col-cat">
+                <span class="cat-badge" *ngIf="row.categorie">{{ row.categorie }}</span>
+              </td>
 
               <!-- Stock -->
               <td class="col-stock">
-                <span *ngIf="row.stockQty !== null" class="stock-badge"
-                  [class.stock-low]="row.stockQty < 5">
-                  {{ row.stockQty }}
+                <span *ngIf="getStock(row) !== null" class="stock-badge"
+                  [class.stock-low]="getStock(row)! < 5">
+                  {{ getStock(row) }}
                 </span>
-                <span *ngIf="row.stockQty === null" class="stock-na">—</span>
+                <span *ngIf="getStock(row) === null" class="stock-na">—</span>
               </td>
 
               <!-- Price per supplier -->
-              <td *ngFor="let cell of row.items"
+              <td *ngFor="let f of fournisseurs()"
                   class="col-fourn price-cell"
-                  [class.best]="isBest(cell, row)"
-                  [class.absent]="!cell.ligne">
+                  [class.best]="getCellForFournisseur(row, f)?.est_meilleur_prix"
+                  [class.absent]="!getCellForFournisseur(row, f)">
 
-                <ng-container *ngIf="cell.ligne; else noData">
-                  <span class="price">{{ +cell.ligne.prix_unitaire! | number:'1.3-3' }} TND</span>
-                  <span class="qty" *ngIf="cell.ligne.quantite">
-                    × {{ +cell.ligne.quantite }}
+                <ng-container *ngIf="getCellForFournisseur(row, f) as cell; else noData">
+                  <span class="price">{{ +cell.prix_unitaire! | number:'1.3-3' }} TND</span>
+                  <span class="orig-desig" matTooltip="Désignation originale du fournisseur">
+                    {{ cell.designation_originale }}
                   </span>
-                  <span class="remise" *ngIf="cell.ligne.remise_pct">
-                    -{{ +cell.ligne.remise_pct }}%
-                  </span>
-                  <span class="tva" *ngIf="cell.ligne.tva_taux">
-                    TVA {{ +cell.ligne.tva_taux }}%
-                  </span>
-                  <mat-icon class="best-icon" *ngIf="isBest(cell, row)">emoji_events</mat-icon>
+                  <mat-icon class="best-icon" *ngIf="cell.est_meilleur_prix">emoji_events</mat-icon>
                 </ng-container>
 
                 <ng-template #noData>
@@ -167,6 +185,7 @@
               <td class="col-article total-label">
                 <mat-icon>calculate</mat-icon> Total TTC
               </td>
+              <td class="col-cat">—</td>
               <td class="col-stock">—</td>
               <td *ngFor="let f of fournisseurs()"
                   class="col-fourn total-cell"
@@ -178,6 +197,15 @@
           </tfoot>
         </table>
       </div>
+
+      <!-- Savings summary -->
+      <div class="savings-summary" *ngIf="articlesAvecEcart() > 0">
+        <mat-icon>savings</mat-icon>
+        <span>
+          {{ articlesAvecEcart() }}
+          article(s) avec un écart de prix entre fournisseurs
+        </span>
+      </div>
     </mat-card-content>
 
   </mat-card>
@@ -185,7 +213,7 @@
   <!-- Empty state -->
   <div class="empty-state" *ngIf="docResults().length === 0">
     <mat-icon>compare_arrows</mat-icon>
-    <p>Importez au moins 2 documents pour lancer la comparaison</p>
+    <p>Importez au moins 1 document pour lancer la comparaison</p>
   </div>
 
 </div>

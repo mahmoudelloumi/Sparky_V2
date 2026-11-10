@@ -114,6 +114,17 @@
   > mat-icon { font-size: 90px; color: #e8eaf6; width: 90px; height: 90px; margin: 0 auto 20px; display: block; }
   h2 { color: #555; margin-bottom: 8px; }
   p  { color: #aaa; margin-bottom: 28px; }
+
+  button mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    margin-right: 6px;
+    vertical-align: middle;
+    display: inline-block;
+    color: inherit;
+  }
 }
 
 // ── Grid ─────────────────────────────────────────────────────────────────────

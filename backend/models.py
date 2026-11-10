@@ -256,6 +256,8 @@ class ArticleSpecifications(BaseModel):
     nb_poles: Optional[int] = None             # 2P, 3P
     # Divers
     modules: Optional[int] = None              # coffret 8 modules
+    puissance_kw: Optional[float] = None       # 8, 5 ... (Onduleurs)
+    capacite_kwh: Optional[float] = None       # 5.12, 4.8 ... (Batteries)
 
 
 class ArticleCanonique(BaseModel):
@@ -420,3 +422,65 @@ class ComparaisonPrixResponse(BaseModel):
     nb_articles: int
     fournisseurs: List[str]                 # liste ordonnée pour les en-têtes de colonnes
     articles: List[ArticlePrixComparaison]
+
+
+# ============================================================
+# COMPARAISON INTELLIGENTE — Cross-supplier avec normalisation
+# ============================================================
+
+class SmartCompareLigne(BaseModel):
+    """Une ligne de document pour la comparaison intelligente."""
+    designation: str
+    reference: Optional[str] = None
+    quantite: Optional[Decimal] = None
+    unite: Optional[str] = None
+    prix_unitaire: Optional[Decimal] = None
+    remise_pct: Optional[Decimal] = None
+    tva_taux: Optional[Decimal] = None
+    montant_ht: Optional[Decimal] = None
+    montant_ttc: Optional[Decimal] = None
+    marque: Optional[str] = None
+
+
+class SmartCompareDocument(BaseModel):
+    """Un document (devis/facture) d'un fournisseur."""
+    doc_id: str
+    fournisseur: str
+    lignes: List[SmartCompareLigne]
+
+
+class SmartCompareRequest(BaseModel):
+    """Requête de comparaison intelligente multi-fournisseurs."""
+    documents: List[SmartCompareDocument]
+
+
+class SmartCompareArticleCell(BaseModel):
+    """Prix d'un fournisseur pour un article normalisé."""
+    fournisseur: str
+    designation_originale: str
+    prix_unitaire: Optional[Decimal] = None
+    quantite: Optional[Decimal] = None
+    remise_pct: Optional[Decimal] = None
+    tva_taux: Optional[Decimal] = None
+    montant_ht: Optional[Decimal] = None
+    reference: Optional[str] = None
+    marque: Optional[str] = None
+    est_meilleur_prix: bool = False
+
+
+class SmartCompareArticleRow(BaseModel):
+    """Un article normalisé avec les prix de chaque fournisseur."""
+    nom_normalise: str
+    reference_interne: str
+    categorie: Optional[str] = None
+    items: List[SmartCompareArticleCell]
+    meilleur_prix: Optional[Decimal] = None
+    ecart_pct: Optional[float] = None
+
+
+class SmartCompareResponse(BaseModel):
+    """Réponse de la comparaison intelligente."""
+    nb_articles: int
+    fournisseurs: List[str]
+    articles: List[SmartCompareArticleRow]
+    total_par_fournisseur: dict = {}      # fournisseur → total TTC

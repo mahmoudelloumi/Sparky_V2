@@ -23,9 +23,9 @@ CREATE TABLE users (
 
 CREATE INDEX idx_users_email ON users(email);
 
--- Seed admin user (password: admin123 — bcrypt hash)
+-- Seed admin user (password: sparky2026 en clair)
 INSERT INTO users (email, password_hash, nom, role) VALUES
-    ('admin@sparky.tn', '$2b$12$pOuNp.FLGFUcDPWWOLoVTefX03Q3RRmUO5bjzMvTLKBt4dTIlirjS', 'Admin SPARKY', 'admin');
+    ('admin@sparky.tn', 'sparky2026', 'Admin SPARKY', 'admin');
 
 
 -- ============================================================
@@ -192,6 +192,22 @@ CREATE TABLE bons_commande (
     created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE TABLE lignes_bon_commande (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    bc_id           UUID NOT NULL REFERENCES bons_commande(id) ON DELETE CASCADE,
+    reference       VARCHAR(200),
+    designation     TEXT NOT NULL,
+    quantite        DECIMAL(10,3),
+    unite           VARCHAR(20),
+    prix_unitaire   DECIMAL(12,4),
+    remise_pct      DECIMAL(5,2) DEFAULT 0,
+    montant_ht      DECIMAL(12,2),
+    tva_taux        DECIMAL(5,2),
+    position        INTEGER DEFAULT 0
+);
+
+CREATE INDEX idx_lignes_bc_bc ON lignes_bon_commande(bc_id);
+
 CREATE INDEX idx_bc_document ON bons_commande(document_id);
 CREATE INDEX idx_bc_numero ON bons_commande(numero_bc);
 
@@ -215,6 +231,23 @@ CREATE TABLE avoirs (
 );
 
 CREATE INDEX idx_avoirs_document ON avoirs(document_id);
+
+CREATE TABLE lignes_avoir (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    avoir_id        UUID NOT NULL REFERENCES avoirs(id) ON DELETE CASCADE,
+    reference       VARCHAR(200),
+    designation     TEXT NOT NULL,
+    quantite        DECIMAL(10,3),
+    unite           VARCHAR(20),
+    prix_unitaire   DECIMAL(12,4),
+    remise_pct      DECIMAL(5,2) DEFAULT 0,
+    montant_ht      DECIMAL(12,2),
+    tva_taux        DECIMAL(5,2),
+    motif           TEXT,
+    position        INTEGER DEFAULT 0
+);
+
+CREATE INDEX idx_lignes_avoir_avoir ON lignes_avoir(avoir_id);
 CREATE INDEX idx_avoirs_numero ON avoirs(numero_avoir);
 
 -- ============================================================
@@ -289,23 +322,6 @@ CREATE INDEX idx_comparaisons_items_comp ON comparaisons_devis_items(comparaison
 CREATE INDEX idx_comparaisons_items_devis ON comparaisons_devis_items(devis_id);
 
 -- ============================================================
--- TABLE: classifications_log (AI classification audit trail)
--- ============================================================
-
-CREATE TABLE classifications_log (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    document_id     UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    type_predit     document_type,
-    score_confiance DECIMAL(5,4),
-    top_predictions JSONB,              -- Array of {type, score}
-    modele_version  VARCHAR(50),
-    duree_ms        INTEGER,
-    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX idx_classif_log_document ON classifications_log(document_id);
-
--- ============================================================
 -- TABLE: articles (Catalogue canonique des produits)
 -- Un seul enregistrement par produit, peu importe le fournisseur.
 -- ============================================================
@@ -318,6 +334,9 @@ CREATE TABLE articles (
     unite_mesure        VARCHAR(20),                    -- pièce(s), Métre, etc.
     specifications      JSONB DEFAULT '{}',             -- {section_mm2, couleur, longueur_mm, largeur_mm, puissance_wc, tension_v, …}
     description         TEXT,
+    quantite_totale     DECIMAL(12,3) DEFAULT 0,        -- somme des quantités vues sur tous les documents
+    nb_apparitions      INTEGER DEFAULT 0,              -- nombre de documents où cet article est apparu
+    prix_dernier        DECIMAL(12,4),                  -- dernier prix unitaire vu
     actif               BOOLEAN DEFAULT TRUE,
     created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -327,117 +346,6 @@ CREATE INDEX idx_articles_reference    ON articles(reference_interne);
 CREATE INDEX idx_articles_categorie    ON articles(categorie);
 CREATE INDEX idx_articles_nom          ON articles USING gin(nom_normalise gin_trgm_ops);
 CREATE INDEX idx_articles_specs        ON articles USING gin(specifications);
-
--- ============================================================
--- TABLE: articles_fournisseurs (Correspondances fournisseur → article canonique)
--- Chaque fournisseur peut avoir son propre nom/référence pour le même article.
--- ============================================================
-
-CREATE TABLE articles_fournisseurs (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    article_id          UUID NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
-    fournisseur_id      UUID NOT NULL REFERENCES fournisseurs(id) ON DELETE CASCADE,
-    reference_fournisseur VARCHAR(200),                 -- référence chez ce fournisseur
-    nom_fournisseur     TEXT NOT NULL,                  -- désignation telle qu'elle apparaît sur la facture
-    prix_achat          DECIMAL(12,4),
-    prix_vente          DECIMAL(12,4),
-    marge_pct           DECIMAL(5,2),
-    tva_taux            DECIMAL(5,2) DEFAULT 19.0,
-    marque              VARCHAR(255),
-    score_similarite    DECIMAL(5,4) DEFAULT 1.0,       -- 1.0 = correspondance exacte confirmée
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE (fournisseur_id, reference_fournisseur)
-);
-
-CREATE INDEX idx_artfourn_article      ON articles_fournisseurs(article_id);
-CREATE INDEX idx_artfourn_fournisseur  ON articles_fournisseurs(fournisseur_id);
-CREATE INDEX idx_artfourn_ref          ON articles_fournisseurs(reference_fournisseur);
-CREATE INDEX idx_artfourn_nom          ON articles_fournisseurs USING gin(nom_fournisseur gin_trgm_ops);
-
--- ============================================================
--- TABLE: mouvements_stock (Entrées / sorties par document source)
--- La quantité totale d'un article = SUM(quantite) sur ses mouvements.
--- ============================================================
-
-CREATE TYPE mouvement_type AS ENUM ('entree', 'sortie', 'correction');
-
-CREATE TABLE mouvements_stock (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    article_id          UUID NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
-    fournisseur_id      UUID REFERENCES fournisseurs(id) ON DELETE SET NULL,
-    document_id         UUID REFERENCES documents(id) ON DELETE SET NULL,  -- facture / BL source
-    type_mouvement      mouvement_type NOT NULL DEFAULT 'entree',
-    quantite            DECIMAL(12,4) NOT NULL,                            -- positif = entree, négatif = sortie
-    prix_unitaire       DECIMAL(12,4),
-    date_mouvement      DATE NOT NULL DEFAULT CURRENT_DATE,
-    notes               TEXT,
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX idx_mvt_article      ON mouvements_stock(article_id);
-CREATE INDEX idx_mvt_document     ON mouvements_stock(document_id);
-CREATE INDEX idx_mvt_fournisseur  ON mouvements_stock(fournisseur_id);
-CREATE INDEX idx_mvt_date         ON mouvements_stock(date_mouvement DESC);
-
--- ============================================================
--- VIEW: v_stock_articles  (quantité totale par article)
--- ============================================================
-
-CREATE VIEW v_stock_articles AS
-SELECT
-    a.id,
-    a.reference_interne,
-    a.nom_normalise,
-    a.categorie,
-    a.unite_mesure,
-    a.specifications,
-    COALESCE(SUM(
-        CASE m.type_mouvement
-            WHEN 'entree'     THEN  m.quantite
-            WHEN 'sortie'     THEN -m.quantite
-            WHEN 'correction' THEN  m.quantite
-        END
-    ), 0) AS quantite_totale,
-    COUNT(DISTINCT m.fournisseur_id) AS nb_fournisseurs,
-    MAX(m.date_mouvement)            AS derniere_entree
-FROM articles a
-LEFT JOIN mouvements_stock m ON m.article_id = a.id
-WHERE a.actif = TRUE
-GROUP BY a.id, a.reference_interne, a.nom_normalise, a.categorie, a.unite_mesure, a.specifications;
-
--- ============================================================
--- VIEW: v_stock_par_fournisseur  (quantité par article ET fournisseur)
--- ============================================================
-
-CREATE VIEW v_stock_par_fournisseur AS
-SELECT
-    a.id            AS article_id,
-    a.reference_interne,
-    a.nom_normalise,
-    a.categorie,
-    f.id            AS fournisseur_id,
-    f.nom           AS fournisseur_nom,
-    af.nom_fournisseur,
-    af.reference_fournisseur,
-    af.prix_achat,
-    af.prix_vente,
-    COALESCE(SUM(
-        CASE m.type_mouvement
-            WHEN 'entree'     THEN  m.quantite
-            WHEN 'sortie'     THEN -m.quantite
-            WHEN 'correction' THEN  m.quantite
-        END
-    ), 0) AS quantite,
-    a.unite_mesure
-FROM articles a
-JOIN articles_fournisseurs af ON af.article_id = a.id
-JOIN fournisseurs f ON f.id = af.fournisseur_id
-LEFT JOIN mouvements_stock m ON m.article_id = a.id AND m.fournisseur_id = f.id
-WHERE a.actif = TRUE
-GROUP BY a.id, a.reference_interne, a.nom_normalise, a.categorie,
-         f.id, f.nom, af.nom_fournisseur, af.reference_fournisseur,
-         af.prix_achat, af.prix_vente, a.unite_mesure;
 
 -- ============================================================
 -- TRIGGERS: auto-update updated_at

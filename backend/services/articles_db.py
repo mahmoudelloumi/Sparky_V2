@@ -282,49 +282,65 @@ async def get_comparaison_prix(
     categorie: Optional[str] = None,
 ) -> ComparaisonPrixResponse:
     """
-    Build the price comparison table from DB tables:
-    articles + articles_fournisseurs + fournisseurs + mouvements_stock.
+    Build the price comparison table directly from devis/factures lines,
+    grouping by designation across suppliers.
     """
-    cat_filter = "AND a.categorie = :cat" if categorie else ""
-
-    sql = f"""
-        WITH stock AS (
-            SELECT article_id,
-                   SUM(CASE type_mouvement
-                           WHEN 'sortie'     THEN -quantite
-                           WHEN 'correction' THEN  quantite
-                           ELSE                    quantite
-                       END) AS quantite_totale
-            FROM mouvements_stock
-            GROUP BY article_id
+    sql = """
+        WITH all_lines AS (
+            SELECT
+                ld.designation,
+                ld.reference,
+                ld.unite,
+                ld.prix_unitaire,
+                NULL AS tva_taux,
+                NULL AS marque,
+                f.id   AS fournisseur_id,
+                f.nom  AS fournisseur_nom,
+                d.created_at AS line_date
+            FROM lignes_devis ld
+            JOIN devis dv      ON dv.id = ld.devis_id
+            JOIN documents d   ON d.id = dv.document_id
+            LEFT JOIN fournisseurs f ON f.id = dv.fournisseur_id
+            WHERE ld.prix_unitaire IS NOT NULL
+              AND ld.designation IS NOT NULL
+            UNION ALL
+            SELECT
+                lf.designation,
+                lf.reference,
+                lf.unite,
+                lf.prix_unitaire,
+                lf.tva_taux,
+                NULL AS marque,
+                f.id   AS fournisseur_id,
+                f.nom  AS fournisseur_nom,
+                d.created_at AS line_date
+            FROM lignes_facture lf
+            JOIN factures fa   ON fa.id = lf.facture_id
+            JOIN documents d   ON d.id = fa.document_id
+            LEFT JOIN fournisseurs f ON f.id = fa.fournisseur_id
+            WHERE lf.prix_unitaire IS NOT NULL
+              AND lf.designation IS NOT NULL
         )
         SELECT
-            a.id                    AS article_id,
-            a.reference_interne,
-            a.nom_normalise,
-            a.categorie,
-            a.unite_mesure,
-            COALESCE(s.quantite_totale, 0) AS quantite_stock,
-            f.id                    AS fournisseur_id,
-            f.nom                   AS fournisseur_nom,
-            af.nom_fournisseur,
-            af.reference_fournisseur,
-            af.prix_achat,
-            af.prix_vente,
-            af.tva_taux,
-            af.marque
-        FROM articles a
-        LEFT JOIN stock s ON s.article_id = a.id
-        JOIN articles_fournisseurs af ON af.article_id = a.id
-        JOIN fournisseurs f ON f.id = af.fournisseur_id
-        WHERE a.actif = TRUE
-          AND af.prix_achat IS NOT NULL
-          {cat_filter}
-        ORDER BY a.categorie NULLS LAST, a.nom_normalise, f.nom
+            md5(LOWER(REGEXP_REPLACE(designation, '[^a-zA-Z0-9]', '', 'g')))::text AS article_id,
+            LOWER(REGEXP_REPLACE(designation, '[^a-zA-Z0-9]', '', 'g')) AS reference_interne,
+            designation                         AS nom_normalise,
+            NULL::text                          AS categorie,
+            unite                               AS unite_mesure,
+            0::numeric                          AS quantite_stock,
+            COALESCE(fournisseur_id::text,
+                     md5(COALESCE(fournisseur_nom, 'inconnu'))::text) AS fournisseur_id,
+            COALESCE(fournisseur_nom, 'Inconnu') AS fournisseur_nom,
+            designation                         AS nom_fournisseur,
+            reference                           AS reference_fournisseur,
+            prix_unitaire                       AS prix_achat,
+            NULL::numeric                       AS prix_vente,
+            tva_taux                            AS tva_taux,
+            marque                              AS marque
+        FROM all_lines
+        ORDER BY nom_normalise, fournisseur_nom
     """
     params: dict = {}
-    if categorie:
-        params["cat"] = categorie
 
     result = await session.execute(text(sql), params)
     rows = result.mappings().all()
@@ -332,77 +348,81 @@ async def get_comparaison_prix(
     if not rows:
         return ComparaisonPrixResponse(nb_articles=0, fournisseurs=[], articles=[])
 
-    # Group by article
-    articles_dict: dict[str, dict] = {}
-    fournisseurs_set: dict[str, str] = {}   # id → nom (ordered)
+    if not rows:
+        return ComparaisonPrixResponse(nb_articles=0, fournisseurs=[], articles=[])
 
+    # Reconstruire le catalogue dynamiquement avec le normalizer pour le matching intelligent
+    from services.normalizer import ProductNormalizer
+    from models import NormalizeLigneRequest
+    norm = ProductNormalizer()
+    
+    fournisseurs_set = {}
+    
     for row in rows:
-        art_id = str(row["article_id"])
         fourn_id = str(row["fournisseur_id"])
         fourn_nom = row["fournisseur_nom"]
-
         if fourn_id not in fournisseurs_set:
             fournisseurs_set[fourn_id] = fourn_nom
+            
+        req = NormalizeLigneRequest(
+            document_id="db",
+            designation=row["nom_fournisseur"],
+            reference=row["reference_fournisseur"],
+            quantite=1.0,
+            unite=row["unite_mesure"],
+            prix_unitaire=row["prix_achat"],
+            prix_vente=row["prix_vente"],
+            remise_pct=0.0,
+            tva_taux=row["tva_taux"],
+            fournisseur_id=fourn_id,
+            fournisseur_nom=fourn_nom,
+            marque=row["marque"]
+        )
+        norm.normalize_ligne(req)
 
-        if art_id not in articles_dict:
-            articles_dict[art_id] = {
-                "article_id":    art_id,
-                "reference_interne": row["reference_interne"],
-                "nom_normalise": row["nom_normalise"],
-                "categorie":     row["categorie"],
-                "unite_mesure":  row["unite_mesure"],
-                "quantite_stock": Decimal(str(row["quantite_stock"])),
-                "prix": [],
-            }
-
-        articles_dict[art_id]["prix"].append({
-            "fournisseur_id":        fourn_id,
-            "fournisseur_nom":       fourn_nom,
-            "nom_fournisseur":       row["nom_fournisseur"],
-            "reference_fournisseur": row["reference_fournisseur"],
-            "prix_achat":            Decimal(str(row["prix_achat"])),
-            "prix_vente":            Decimal(str(row["prix_vente"])) if row["prix_vente"] else None,
-            "tva_taux":              Decimal(str(row["tva_taux"])) if row["tva_taux"] else None,
-            "marque":                row["marque"],
-        })
-
-    # Build response
-    articles_out: list[ArticlePrixComparaison] = []
-    for art in articles_dict.values():
-        prix_list = art["prix"]
-        meilleur = min(prix_list, key=lambda p: float(p["prix_achat"]))
-        pire_prix = max(float(p["prix_achat"]) for p in prix_list)
-        meilleur_prix = float(meilleur["prix_achat"])
-        economie_pct = round((pire_prix - meilleur_prix) / meilleur_prix * 100, 1) \
-            if meilleur_prix > 0 and pire_prix != meilleur_prix else 0.0
-
-        prix_par_fourn = [
-            PrixFournisseur(
-                fournisseur_id=p["fournisseur_id"],
-                fournisseur_nom=p["fournisseur_nom"],
-                nom_fournisseur=p["nom_fournisseur"],
-                reference_fournisseur=p["reference_fournisseur"],
-                prix_achat=p["prix_achat"],
-                prix_vente=p.get("prix_vente"),
-                tva_taux=p.get("tva_taux"),
-                marque=p.get("marque"),
-                est_meilleur_prix=(p["fournisseur_id"] == meilleur["fournisseur_id"]),
-                surcout_pct=round((float(p["prix_achat"]) - meilleur_prix) / meilleur_prix * 100, 1)
-                    if float(p["prix_achat"]) != meilleur_prix else 0.0,
+    # Construire la réponse depuis le catalogue en mémoire de norm
+    articles_out = []
+    cat = norm.catalogue
+    
+    for art in cat._articles.values():
+        art_id = art["id"]
+        aliases = cat._supplier_aliases.get(art_id, [])
+        prix_disponibles = [a for a in aliases if a.get("prix_achat") is not None]
+        if not prix_disponibles:
+            continue
+            
+        meilleur = min(prix_disponibles, key=lambda a: float(a["prix_achat"]))
+        meilleur_p = float(meilleur["prix_achat"])
+        pire_p = max(float(a["prix_achat"]) for a in prix_disponibles)
+        ecart_pct = round((pire_p - meilleur_p) / meilleur_p * 100, 1) if meilleur_p > 0 and pire_p != meilleur_p else 0.0
+        
+        prix_par_fourn = []
+        for p in sorted(prix_disponibles, key=lambda x: float(x["prix_achat"])):
+            prix_par_fourn.append(
+                PrixFournisseur(
+                    fournisseur_id=p["fournisseur_id"],
+                    fournisseur_nom=p["fournisseur_nom_court"],
+                    nom_fournisseur=p["nom_fournisseur"],
+                    reference_fournisseur=p["reference_fournisseur"],
+                    prix_achat=p["prix_achat"],
+                    prix_vente=p.get("prix_vente"),
+                    tva_taux=p.get("tva_taux"),
+                    marque=p.get("marque"),
+                    est_meilleur_prix=(p["fournisseur_id"] == meilleur["fournisseur_id"]),
+                    surcout_pct=round((float(p["prix_achat"]) - meilleur_p) / meilleur_p * 100, 1) if meilleur_p > 0 and float(p["prix_achat"]) != meilleur_p else 0.0
+                )
             )
-            for p in sorted(prix_list, key=lambda x: float(x["prix_achat"]))
-        ]
-
+            
         articles_out.append(ArticlePrixComparaison(
-            article_id=art["article_id"],
+            article_id=art_id,
             reference_interne=art["reference_interne"],
             nom_normalise=art["nom_normalise"],
-            categorie=art["categorie"],
-            unite_mesure=art["unite_mesure"],
-            quantite_stock=art["quantite_stock"],
+            categorie=art.get("categorie"),
+            unite_mesure=art.get("unite_mesure"),
+            quantite_stock=0,
             meilleur_prix_achat=meilleur["prix_achat"],
-            meilleur_fournisseur=meilleur["fournisseur_nom"],
-            economie_max_pct=economie_pct,
+            meilleur_fournisseur=meilleur["fournisseur_nom_court"],
+            economie_max_pct=ecart_pct,
             prix_par_fournisseur=prix_par_fourn,
         ))
 

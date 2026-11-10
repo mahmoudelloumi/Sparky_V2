@@ -197,6 +197,60 @@ export interface ComparaisonPrixResponse {
   articles: ArticlePrixComparaison[];
 }
 
+// ---- Smart Compare (cross-supplier intelligent grouping) ----
+
+export interface SmartCompareLigne {
+  designation: string;
+  reference?: string;
+  quantite?: number;
+  unite?: string;
+  prix_unitaire?: number;
+  remise_pct?: number;
+  tva_taux?: number;
+  montant_ht?: number;
+  montant_ttc?: number;
+  marque?: string;
+}
+
+export interface SmartCompareDocument {
+  doc_id: string;
+  fournisseur: string;
+  lignes: SmartCompareLigne[];
+}
+
+export interface SmartCompareRequest {
+  documents: SmartCompareDocument[];
+}
+
+export interface SmartCompareArticleCell {
+  fournisseur: string;
+  designation_originale: string;
+  prix_unitaire?: number;
+  quantite?: number;
+  remise_pct?: number;
+  tva_taux?: number;
+  montant_ht?: number;
+  reference?: string;
+  marque?: string;
+  est_meilleur_prix: boolean;
+}
+
+export interface SmartCompareArticleRow {
+  nom_normalise: string;
+  reference_interne: string;
+  categorie?: string;
+  items: SmartCompareArticleCell[];
+  meilleur_prix?: number;
+  ecart_pct?: number;
+}
+
+export interface SmartCompareResponse {
+  nb_articles: number;
+  fournisseurs: string[];
+  articles: SmartCompareArticleRow[];
+  total_par_fournisseur: { [key: string]: number };
+}
+
 // ---- UI-only helper ----
 
 export interface DocumentCard {

@@ -1,11 +1,18 @@
-﻿import { Component, OnInit, signal, computed } from '@angular/core';
+import { Component, OnInit, signal, computed } from '@angular/core';
 import { ApiService } from '../../services/api.service';
 import { DocumentService } from '../../services/document.service';
-import { DocumentCard, LigneDocument } from '../../models/document.model';
+import {
+  DocumentCard,
+  LigneDocument,
+  SmartCompareRequest,
+  SmartCompareResponse,
+  SmartCompareArticleRow,
+  SmartCompareArticleCell,
+} from '../../models/document.model';
 import { of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
-// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Types ───────────────────────────────────────────────────────────────────
 
 export interface DocResult {
   id: string;
@@ -17,18 +24,7 @@ export interface DocResult {
   error: string | null;
 }
 
-export interface ArticleRow {
-  designation: string;          // normalized key for grouping
-  items: ArticleCell[];         // one per fournisseur
-  stockQty: number | null;
-}
-
-export interface ArticleCell {
-  fournisseur: string;
-  ligne: LigneDocument | null;
-}
-
-// â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Component ───────────────────────────────────────────────────────────────
 
 @Component({
   standalone: false,
@@ -38,7 +34,7 @@ export interface ArticleCell {
 })
 export class PriceComparisonComponent implements OnInit {
 
-  // â”€â”€ state â”€â”€
+  // ── state ──
   existingDocs   = signal<DocumentCard[]>([]);
   selectedIds    = signal<Set<string>>(new Set());
   docResults     = signal<DocResult[]>([]);
@@ -46,48 +42,35 @@ export class PriceComparisonComponent implements OnInit {
   globalError    = signal<string | null>(null);
   stockMap       = signal<Map<string, number>>(new Map());
 
-  // â”€â”€ computed â”€â”€
-  fournisseurs = computed(() =>
-    [...new Set(this.docResults().map(d => d.fournisseur).filter(Boolean))]
-  );
+  // Smart comparison state
+  smartResult       = signal<SmartCompareResponse | null>(null);
+  smartLoading      = signal(false);
+  smartError        = signal<string | null>(null);
 
-  articleRows = computed((): ArticleRow[] => {
-    const docs = this.docResults().filter(d => !d.loading && !d.error);
-    if (docs.length < 1) return [];
-
-    const fournisseurs = this.fournisseurs();
-    const stockMap     = this.stockMap();
-
-    // Group articles by normalized designation
-    const groupMap = new Map<string, Map<string, LigneDocument>>();
-
-    for (const doc of docs) {
-      for (const ligne of doc.lignes) {
-        const key = this._normalize(ligne.designation);
-        if (!groupMap.has(key)) groupMap.set(key, new Map());
-        groupMap.get(key)!.set(doc.fournisseur, ligne);
-      }
-    }
-
-    const rows: ArticleRow[] = [];
-    groupMap.forEach((byFourn, key) => {
-      const items: ArticleCell[] = fournisseurs.map(f => ({
-        fournisseur: f,
-        ligne: byFourn.get(f) ?? null,
-      }));
-      rows.push({
-        designation: key,
-        items,
-        stockQty: stockMap.get(key) ?? null,
-      });
-    });
-
-    return rows;
+  // ── computed ──
+  fournisseurs = computed(() => {
+    const smart = this.smartResult();
+    if (smart) return smart.fournisseurs;
+    return [...new Set(this.docResults().map(d => d.fournisseur).filter(Boolean))];
   });
 
-  anyLoading = computed(() => this.docResults().some(d => d.loading));
+  articleRows = computed((): SmartCompareArticleRow[] => {
+    const smart = this.smartResult();
+    if (smart) return smart.articles;
+    return [];
+  });
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  anyLoading = computed(() =>
+    this.docResults().some(d => d.loading) || this.smartLoading()
+  );
+
+  articlesAvecEcart = computed(() => {
+    const smart = this.smartResult();
+    if (!smart || !smart.articles) return 0;
+    return smart.articles.filter(a => (a.ecart_pct || 0) > 0).length;
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
 
   constructor(
     private api: ApiService,
@@ -105,7 +88,7 @@ export class PriceComparisonComponent implements OnInit {
     this._loadStock();
   }
 
-  // â”€â”€ Import from existing documents â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Import from existing documents ─────────────────────────────────────
 
   toggleExistingDoc(doc: DocumentCard): void {
     const next = new Set(this.selectedIds());
@@ -117,6 +100,7 @@ export class PriceComparisonComponent implements OnInit {
       this._addExistingDoc(doc);
     }
     this.selectedIds.set(next);
+    this._triggerSmartCompare();
   }
 
   isSelected(doc: DocumentCard): boolean {
@@ -132,12 +116,12 @@ export class PriceComparisonComponent implements OnInit {
       type: doc.type_document || 'devis',
       lignes,
       loading: false,
-      error: lignes.length === 0 ? 'Aucun article extrait â€” rÃ©-importez ce fichier.' : null,
+      error: lignes.length === 0 ? 'Aucun article extrait — ré-importez ce fichier.' : null,
     };
     this.docResults.update(r => [...r, result]);
   }
 
-  // â”€â”€ File drag & drop / upload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── File drag & drop / upload ─────────────────────────────────────────
 
   onDragOver(e: DragEvent): void {
     e.preventDefault();
@@ -163,16 +147,18 @@ export class PriceComparisonComponent implements OnInit {
   private _processFiles(files: File[]): void {
     for (const file of files) {
       const id = 'file-' + Math.random().toString(36).slice(2);
+      const isJfif = /\.jfif$/i.test(file.name);
       const placeholder: DocResult = {
         id,
         nom_fichier: file.name,
         fournisseur: file.name.replace(/\.[^.]+$/, ''),
         type: 'devis',
         lignes: [],
-        loading: true,
-        error: null,
+        loading: !isJfif,
+        error: isJfif ? 'Les fichiers JFIF ne sont pas acceptés. Convertissez-les en JPG, PNG ou PDF.' : null,
       };
       this.docResults.update(r => [...r, placeholder]);
+      if (isJfif) continue;
 
       this.api.processDocument(file).subscribe({
         next: (res: any) => {
@@ -182,6 +168,7 @@ export class PriceComparisonComponent implements OnInit {
           this.docResults.update(r => r.map(d =>
             d.id === id ? { ...d, loading: false, lignes, fournisseur, type } : d
           ));
+          this._triggerSmartCompare();
         },
         error: (err: any) => {
           this.docResults.update(r => r.map(d =>
@@ -192,44 +179,105 @@ export class PriceComparisonComponent implements OnInit {
     }
   }
 
-  // â”€â”€ Remove doc â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Remove doc ────────────────────────────────────────────────────────
 
   removeDoc(id: string): void {
     this.docResults.update(r => r.filter(d => d.id !== id));
     const next = new Set(this.selectedIds());
     next.delete(id);
     this.selectedIds.set(next);
+    this._triggerSmartCompare();
   }
 
-  // â”€â”€ Fournisseur name edit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Fournisseur name edit ─────────────────────────────────────────────
 
   updateFournisseur(id: string, value: string): void {
     this.docResults.update(r => r.map(d =>
       d.id === id ? { ...d, fournisseur: value } : d
     ));
+    this._triggerSmartCompare();
   }
 
-  // â”€â”€ Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Reset ─────────────────────────────────────────────────────────────
 
   reset(): void {
     this.docResults.set([]);
     this.selectedIds.set(new Set());
     this.globalError.set(null);
+    this.smartResult.set(null);
+    this.smartError.set(null);
   }
 
-  // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Smart Compare ─────────────────────────────────────────────────────
 
-  bestPrice(row: ArticleRow): number | null {
+  private _smartDebounce: ReturnType<typeof setTimeout> | null = null;
+
+  private _triggerSmartCompare(): void {
+    // Debounce to avoid spamming the backend during rapid changes
+    if (this._smartDebounce) clearTimeout(this._smartDebounce);
+    this._smartDebounce = setTimeout(() => this._runSmartCompare(), 300);
+  }
+
+  private _runSmartCompare(): void {
+    const docs = this.docResults().filter(d => !d.loading && !d.error && d.lignes.length > 0);
+
+    // Need at least 1 document for comparison (or just to display items)
+    if (docs.length < 1) {
+      this.smartResult.set(null);
+      this.smartError.set(null);
+      return;
+    }
+
+    const payload: SmartCompareRequest = {
+      documents: docs.map(d => ({
+        doc_id: d.id,
+        fournisseur: d.fournisseur,
+        lignes: d.lignes.map(l => ({
+          designation: l.designation,
+          reference: l.reference,
+          quantite: l.quantite,
+          unite: l.unite,
+          prix_unitaire: l.prix_unitaire,
+          remise_pct: l.remise_pct,
+          tva_taux: l.tva_taux,
+          montant_ht: l.montant_ht,
+          marque: l.marque,
+        })),
+      })),
+    };
+
+    this.smartLoading.set(true);
+    this.smartError.set(null);
+
+    this.api.smartCompare(payload).pipe(
+      catchError(err => {
+        this.smartError.set(err.message || 'Erreur de comparaison intelligente');
+        this.smartLoading.set(false);
+        return of(null);
+      })
+    ).subscribe(res => {
+      this.smartLoading.set(false);
+      if (res) {
+        this.smartResult.set(res);
+      }
+    });
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+
+  bestPrice(row: SmartCompareArticleRow): number | null {
     const prices = row.items
-      .map(i => i.ligne?.prix_unitaire != null ? Number(i.ligne.prix_unitaire) : null)
+      .map(i => i.prix_unitaire != null ? Number(i.prix_unitaire) : null)
       .filter((p): p is number => p != null && p > 0);
     return prices.length ? Math.min(...prices) : null;
   }
 
-  isBest(cell: ArticleCell, row: ArticleRow): boolean {
-    const best = this.bestPrice(row);
-    if (best === null || cell.ligne?.prix_unitaire == null) return false;
-    return Math.abs(Number(cell.ligne.prix_unitaire) - best) < 0.0001;
+  isBest(cell: SmartCompareArticleCell): boolean {
+    return cell.est_meilleur_prix;
+  }
+
+  getCellForFournisseur(row: SmartCompareArticleRow, fournisseur: string): SmartCompareArticleCell | null {
+    return row.items.find(i => i.fournisseur === fournisseur) || null;
   }
 
   getDocResult(id: string): DocResult | undefined {
@@ -237,27 +285,20 @@ export class PriceComparisonComponent implements OnInit {
   }
 
   totalParFournisseur(fournisseur: string): number {
-    const doc = this.docResults().find(d => d.fournisseur === fournisseur);
-    if (!doc) return 0;
-    return doc.lignes.reduce((acc, l) => {
-      const pu  = Number(l.prix_unitaire  ?? 0);
-      const qty = Number(l.quantite       ?? 1);
-      const rem = Number(l.remise_pct     ?? 0);
-      const tva = Number(l.tva_taux       ?? 0);
-      const ht  = pu * qty * (1 - rem / 100);
-      return acc + ht * (1 + tva / 100);
-    }, 0);
+    const smart = this.smartResult();
+    if (smart && smart.total_par_fournisseur) {
+      return smart.total_par_fournisseur[fournisseur] || 0;
+    }
+    return 0;
   }
 
   isBestTotal(fournisseur: string): boolean {
-    const totals = this.fournisseurs().map(f => this.totalParFournisseur(f)).filter(t => t > 0);
+    const smart = this.smartResult();
+    if (!smart || !smart.total_par_fournisseur) return false;
+    const totals = Object.values(smart.total_par_fournisseur).filter(t => t > 0);
     if (!totals.length) return false;
     const best = Math.min(...totals);
     return Math.abs(this.totalParFournisseur(fournisseur) - best) < 0.001;
-  }
-
-  private _normalize(s: string): string {
-    return s.trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
   private _loadStock(): void {
@@ -267,9 +308,13 @@ export class PriceComparisonComponent implements OnInit {
       if (!res) return;
       const map = new Map<string, number>();
       for (const article of res.articles) {
-        map.set(this._normalize(article.nom_normalise), article.quantite_stock);
+        map.set(article.nom_normalise.trim().toLowerCase(), article.quantite_stock);
       }
       this.stockMap.set(map);
     });
+  }
+
+  getStock(row: SmartCompareArticleRow): number | null {
+    return this.stockMap().get(row.nom_normalise.trim().toLowerCase()) ?? null;
   }
 }

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Devis N° GE/2026/0892 — GREEN ENERGY TUNISIE</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Calibri", "Segoe UI", Arial, sans-serif;
+    font-size: 11pt; color: #1f2937; margin: 0; padding: 18px; background: #fff;
+  }
+  .header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 4px double #b45309; padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .logo {
+    width: 78px; height: 78px; background: #7c2d12; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 10px rgba(124,45,18,.25);
+  }
+  .company-name { font-size: 21pt; font-weight: 800; color: #7c2d12; line-height: 1; }
+  .company-tag  { font-size: 9pt; color: #b45309; font-weight: 600; letter-spacing: 1.2px; margin-top: 4px; }
+  .company-info { font-size: 8.5pt; color: #555; line-height: 1.5; margin-top: 6px; }
+
+  .doc-meta { border: 2px dashed #7c2d12; border-radius: 4px; padding: 12px 16px; min-width: 240px; }
+  .doc-title { font-size: 22pt; font-weight: 800; color: #7c2d12; text-align: center; margin: 0 0 8px; letter-spacing: 1px; }
+  .doc-meta table { width: 100%; font-size: 9pt; border-collapse: collapse; }
+  .doc-meta td { padding: 3px 0; }
+  .doc-meta .lbl { color: #777; font-weight: 600; }
+  .doc-meta .val { text-align: right; font-weight: 700; color: #7c2d12; }
+
+  .client-block {
+    background: #fef3c7; border-left: 4px solid #b45309; padding: 10px 14px;
+    margin-bottom: 18px;
+  }
+  .client-block .lbl { color: #777; font-size: 9pt; font-weight: 600; margin-bottom: 3px; }
+  .client-block .name { font-size: 13pt; font-weight: 700; color: #7c2d12; }
+  .client-block .addr { font-size: 9.5pt; color: #555; margin-top: 3px; }
+
+  table.items { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+  table.items thead th {
+    background: #7c2d12; color: #fff; font-size: 9pt; font-weight: 700;
+    text-transform: uppercase; padding: 8px 6px; border: 1px solid #7c2d12;
+  }
+  table.items tbody td { border: 1px solid #d8dde6; padding: 7px 8px; font-size: 9.5pt; vertical-align: top; }
+  table.items tbody tr:nth-child(even) { background: #fffbeb; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .ctr { text-align: center; }
+
+  .totals-row { display: flex; gap: 14px; margin-top: 8px; }
+  .tva-table, .totals-table { border-collapse: collapse; font-size: 9.5pt; }
+  .tva-table th, .tva-table td { border: 1px solid #d8dde6; padding: 6px 12px; }
+  .tva-table th { background: #fef3c7; color: #7c2d12; font-weight: 700; }
+  .totals-spacer { flex: 1; }
+  .totals-table { flex: 0 0 320px; min-width: 320px; }
+  .totals-table td { padding: 7px 12px; border: 1px solid #d8dde6; }
+  .totals-table td.lbl { background: #fef3c7; font-weight: 700; color: #7c2d12; width: 55%; }
+  .totals-table td.val { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .totals-table tr.grand td.lbl { background: #7c2d12; color: #fff; font-size: 11pt; }
+  .totals-table tr.grand td.val { background: #fde68a; color: #7c2d12; font-size: 13pt; font-weight: 800; }
+
+  .conditions {
+    margin-top: 16px; padding: 10px 14px; background: #fffbeb;
+    border-left: 4px solid #b45309; font-size: 9.5pt; color: #333;
+  }
+  .conditions strong { color: #7c2d12; }
+
+  .footer {
+    margin-top: 24px; border-top: 2px solid #7c2d12; padding-top: 10px;
+    display: flex; justify-content: space-between; font-size: 8pt; color: #777;
+  }
+  .signature { text-align: center; margin-top: 30px; font-size: 9pt; color: #555; }
+  .signature .line { width: 180px; border-top: 1px solid #999; margin: 50px auto 6px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">
+    <div class="logo">
+      <svg width="56" height="56" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <path d="M32 8 C20 24, 20 40, 32 56 C44 40, 44 24, 32 8 Z" fill="#fbbf24"/>
+        <circle cx="32" cy="32" r="6" fill="#7c2d12"/>
+      </svg>
+    </div>
+    <div>
+      <div class="company-name">GREEN ENERGY TUNISIE</div>
+      <div class="company-tag">DISTRIBUTEUR PV — GROSSISTE TECHNIQUE</div>
+      <div class="company-info">
+        Rue de l'Industrie, Z.I. Ben Arous Sud<br>
+        2013 Ben Arous — Tunisie<br>
+        Tél: +216 71 412 358 — quotation@greenenergy.com.tn<br>
+        MF: 0987654/F/B/M/000 — RC: B05432192019
+      </div>
+    </div>
+  </div>
+
+  <div class="doc-meta">
+    <div class="doc-title">QUOTATION</div>
+    <table>
+      <tr><td class="lbl">N° Devis</td><td class="val">GE/2026/0892</td></tr>
+      <tr><td class="lbl">Émis le</td><td class="val">17/04/2026</td></tr>
+      <tr><td class="lbl">Valable jusqu'au</td><td class="val">17/05/2026</td></tr>
+      <tr><td class="lbl">Réf. demande</td><td class="val">RFQ-AB-Sfax-04</td></tr>
+      <tr><td class="lbl">Chargé d'affaires</td><td class="val">M. KHELIFI</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="client-block">
+  <div class="lbl">DESTINATAIRE</div>
+  <div class="name">AHMED BEN SALEM</div>
+  <div class="addr">
+    Av. Habib Bourguiba, Rés. El Yasmine — Apt B12, 3000 Sfax<br>
+    Contact: +216 98 765 432
+  </div>
+</div>
+
+<table class="items">
+  <thead>
+    <tr>
+      <th style="width:4%">#</th>
+      <th style="width:16%">Code Article</th>
+      <th>Description technique</th>
+      <th style="width:5%">U</th>
+      <th style="width:6%">Qté</th>
+      <th style="width:11%">PU HT (TND)</th>
+      <th style="width:11%">Mt HT (TND)</th>
+      <th style="width:6%">TVA</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="ctr">1</td>
+      <td class="ctr">TSM-NEG19RC</td>
+      <td>Panneau solaire Trina 585Wc TSM-NEG19RC.20 Bi-facial — IEC 61215 / 61730</td>
+      <td class="ctr">u</td>
+      <td class="ctr">8</td>
+      <td class="num">562.500</td>
+      <td class="num">4 500.000</td>
+      <td class="ctr">7%</td>
+    </tr>
+    <tr>
+      <td class="ctr">2</td>
+      <td class="ctr">FOX-H3-PRO-5K</td>
+      <td>Inverter solaire FoxESS H3-PRO-5K (5 kW tri-phasé) — protection IP65, monitoring inclus</td>
+      <td class="ctr">u</td>
+      <td class="ctr">1</td>
+      <td class="num">3 180.000</td>
+      <td class="num">3 180.000</td>
+      <td class="ctr">7%</td>
+    </tr>
+    <tr>
+      <td class="ctr">3</td>
+      <td class="ctr">PYL-US5000</td>
+      <td>Pylontech US5000 LFP 48V 100Ah (4.8 kWh) — empilable jusqu'à 16 modules</td>
+      <td class="ctr">u</td>
+      <td class="ctr">2</td>
+      <td class="num">2 780.000</td>
+      <td class="num">5 560.000</td>
+      <td class="ctr">19%</td>
+    </tr>
+    <tr>
+      <td class="ctr">4</td>
+      <td class="ctr">CBL-PV4-50</td>
+      <td>Cable photovoltaïque H1Z2Z2-K 4 mm² (50 m) — résistance UV, double isolation</td>
+      <td class="ctr">rl</td>
+      <td class="ctr">2</td>
+      <td class="num">88.000</td>
+      <td class="num">176.000</td>
+      <td class="ctr">19%</td>
+    </tr>
+    <tr>
+      <td class="ctr">5</td>
+      <td class="ctr">TBL-PROT-PV</td>
+      <td>Tableau de protection PV AC+DC + SPD (parafoudre Type 1+2) — coffret IP65</td>
+      <td class="ctr">u</td>
+      <td class="ctr">1</td>
+      <td class="num">645.000</td>
+      <td class="num">645.000</td>
+      <td class="ctr">19%</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="totals-row">
+  <table class="tva-table">
+    <thead>
+      <tr><th>Taux TVA</th><th>Base HT</th><th>Montant TVA</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="num">7.00 %</td><td class="num">7 680.000</td><td class="num">537.600</td></tr>
+      <tr><td class="num">19.00 %</td><td class="num">6 381.000</td><td class="num">1 212.390</td></tr>
+    </tbody>
+  </table>
+
+  <div class="totals-spacer"></div>
+
+  <table class="totals-table">
+    <tr><td class="lbl">Sous-total HT</td><td class="val">14 061.000 TND</td></tr>
+    <tr><td class="lbl">Total TVA</td><td class="val">1 749.990 TND</td></tr>
+    <tr><td class="lbl">Timbre fiscal</td><td class="val">1.000 TND</td></tr>
+    <tr class="grand"><td class="lbl">NET À PAYER TTC</td><td class="val">15 811.990 TND</td></tr>
+  </table>
+</div>
+
+<div class="conditions">
+  <strong>Conditions commerciales :</strong> Validité 30 jours · Paiement 50 % à la commande, 50 % à la livraison ·
+  Livraison sous 5 jours ex-works Ben Arous · Garantie constructeur applicable · Frais de transport et installation non compris.
+</div>
+
+<div class="signature">
+  Bon pour accord du client
+  <div class="line"></div>
+  Pour GREEN ENERGY TUNISIE — M. KHELIFI
+</div>
+
+<div class="footer">
+  <div>GREEN ENERGY TUNISIE SARL · MF: 0987654/F/B/M/000 · RIB: 07 042 0099 0000 8810 432 (Attijari Bank)</div>
+  <div>Page 1/1 · Édité le 17/04/2026</div>
+</div>
+
+</body>
+</html>
